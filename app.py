@@ -41,6 +41,8 @@ with tab_input:
         gold_price = st.number_input("Gold ($/oz)", value=4500.0, format="%.2f")
 
     st.subheader("구매 Lot 정보 입력")
+    st.caption("💡 **안내**: 중량은 소수점 3자리까지 표시하고 복/붙하세요.")
+
     init_data = pd.DataFrame([{
     "Vendors": "", "Lot No": "", 
     "WMT": 0.000, "H2O(%)": 0.00, "DMT": 0.000, "Franchise(%)": 0.00, "NDMT": 0.000, 
