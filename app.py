@@ -41,7 +41,11 @@ with tab_input:
         gold_price = st.number_input("Gold ($/oz)", value=4500.0, format="%.2f")
 
     st.subheader("구매 Lot 정보 입력")
-    init_data = pd.DataFrame([{"Vendors": "", "Lot No": "", "WMT": 0.000, "DMT": 0.000, "H2O(%)": 0.00, "Franchise(%)": 0.00, "NDMT": 0.000, "Cu(%)": 0.000, "Ag(g/MT)": 0.00, "Au(g/MT)": 0.00, "As(%)": 0.000}])
+    init_data = pd.DataFrame([{
+    "Vendors": "", "Lot No": "", 
+    "WMT": 0.000, "H2O(%)": 0.00, "DMT": 0.000, "Franchise(%)": 0.00, "NDMT": 0.000, 
+    "Cu(%)": 0.000, "Ag(g/MT)": 0.00, "Au(g/MT)": 0.00, "As(%)": 0.000
+}])
     
     edited_df = st.data_editor(
         init_data, num_rows="dynamic", use_container_width=True,
