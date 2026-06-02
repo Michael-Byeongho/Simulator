@@ -174,8 +174,8 @@ with tab_input:
                         results_df,
                         use_container_width=True,
                         column_config={
-                            "판매단가($/DMT)": st.column_config.NumberColumn(format="$ %.2f"),
                             "총 판매금액($)": st.column_config.NumberColumn(format="$ %.2f"),
+                            "판매단가($/DMT)": st.column_config.NumberColumn(format="$ %.2f"),
                             "Cu단가($)": st.column_config.NumberColumn(format="$ %.2f"),
                             "Ag단가($)": st.column_config.NumberColumn(format="$ %.2f"),
                             "Au단가($)": st.column_config.NumberColumn(format="$ %.2f"),
