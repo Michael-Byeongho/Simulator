@@ -92,26 +92,36 @@ with tab_input:
             else:
                 c4.metric("평균 As", f"{avg_as:.3f} %")
 
+
+
+
+
+
+            
             # 2. 제련소별 계산 로직 실행
             match_results = [] 
             for name, spec in st.session_state['smelters'].items():
-                # --- [단위 상수] ---
-                lb_per_mt = 2204.62
-                oz_per_mt = 32.1507
+                # --- [단위 상수 정의] ---
+                lb_per_mt = 2204.6226  # 1 MT = 2204.6226 lb (정밀 상수)
+                oz_per_g = 0.032150747 # 1g = 0.032150747 troy oz
                 
                 # --- 1. Cu 계산 ---
                 cu_p = float(spec.get('Cu_pay', 0)) / 100
                 cu_md = float(spec.get('Cu_MD', 0))
                 
-                # [톤당] 지급 함량 (%) 계산
+                # [수정] 일반적인 제련소 구리 지급률 적용 방식 (계약서 조건에 따라 대조 필요)
+                # 만약 계약서가 '지급률과 미니멈 공제 중 제련소에 유리한 쪽' 이라면 max를 써야 합니다.
+                # 여기서는 가장 보편적인 '지급률 적용 vs 품위공제 중 작은 값'을 유지하되, 수식 단위를 확인해야 합니다.
                 payable_content_percent = min(avg_cu * cu_p, avg_cu - cu_md)
                 payable_content_percent = max(0, payable_content_percent)
 
-                # [단가] MT당 Cu 수익 ($/DMT)
+                # [단가] MT당 Cu 수익 ($/DMT) -> 품위% 이므로 100으로 나눔
                 cu_rev = (payable_content_percent / 100) * lme_cu
                 
-                cu_rc_unit_dollar = float(spec.get('Cu-RC', 8.0)) / 100 
-                cu_rc_ton = (payable_content_percent / 100 * 2204.62) * cu_rc_unit_dollar
+                # [수정] Cu 정련비(RC) 단가 환산 오류 교정
+                cu_rc_unit_dollar = float(spec.get('Cu-RC', 8.0)) / 100  # 8.0 cents -> 0.08 dollars
+                # MT당 파운드 총량 = (지급품위 / 100) * 2204.6226
+                cu_rc_ton = (payable_content_percent / 100) * lb_per_mt * cu_rc_unit_dollar
 
                 # --- 2. Ag 계산 (MT당 단가 기준) ---
                 ag_min = float(spec.get('Ag_min', 0))
@@ -121,11 +131,10 @@ with tab_input:
                 if avg_ag >= ag_min:
                     ag_pay_qty_per_ton = avg_ag * ag_pay_ratio 
                     
-                # [단가] MT당 수익 ($/DMT)
-                ag_rev_ton = (ag_pay_qty_per_ton / 31.1035) * silver_price
-                
-                # [단가] MT당 은 정련비 비용 ($/DMT) -> 총액이 아닌 단가로 계산해야 합산 가능
-                ag_rc_ton = (ag_pay_qty_per_ton / 31.1035) * float(spec.get('Ag-RC', 0.50))
+                # [수정] 정밀 온스 상수를 사용하여 g/MT -> oz/MT 환산
+                ag_oz_per_ton = ag_pay_qty_per_ton * oz_per_g
+                ag_rev_ton = ag_oz_per_ton * silver_price
+                ag_rc_ton = ag_oz_per_ton * float(spec.get('Ag-RC', 0.50))
 
                 # --- 3. Au 계산 (MT당 단가 기준) ---
                 au_pay_qty_per_ton = 0
@@ -137,11 +146,10 @@ with tab_input:
                         au_pay_qty_per_ton = max(0, (avg_au - ded) * pay)
                         break
                 
-                # [단가] MT당 Au 수익 ($/DMT)
-                au_rev_ton = (au_pay_qty_per_ton / 31.1035) * gold_price
-                
-                # [단가] MT당 Au RC 비용 ($/DMT)
-                au_rc_ton = (au_pay_qty_per_ton / 31.1035) * float(spec.get('Au-RC', 5.00))
+                # [수정] 정밀 온스 상수를 사용하여 g/MT -> oz/MT 환산
+                au_oz_per_ton = au_pay_qty_per_ton * oz_per_g
+                au_rev_ton = au_oz_per_ton * gold_price
+                au_rc_ton = au_oz_per_ton * float(spec.get('Au-RC', 5.00))
 
                 # --- 4. 기타 비용 및 합산 (MT당 단가 기준) ---
                 tc = float(spec.get('TC', 0)) 
@@ -150,7 +158,6 @@ with tab_input:
                 cntr_per_dmt = cntr * (total_wmt / total_dmt) if total_dmt > 0 else 0
                 
                 # [단가] 총 차감비용 합계 ($/DMT)
-                # 모든 RC 항목을 _ton(단가) 기준으로 합산해야 합니다.
                 total_costs = tc + cu_rc_ton + ag_rc_ton + au_rc_ton + cntr_per_dmt
                 
                 # [단가] 최종 Net MT당 단가 ($/DMT)
@@ -159,27 +166,27 @@ with tab_input:
                 # [총액] 총 예상 수익 ($)
                 total_net_rev = net_rev_ton * total_dmt
 
-                # --- 5. 결과 리스트 추가 (변수명 매칭) ---
+                # --- 5. 결과 리스트 추가 ---
                 match_results.append({
                     '제련소': name, 
                     '판매단가($/DMT)': round(net_rev_ton, 2),
                     '총 판매단가($)': round(total_net_rev, 2),
-                    'Cu단가': round(cu_rev, 2),
+                    'Cu단가(인센트 제외순)': round(cu_rev - cu_rc_ton, 2), # 비교하기 쉽도록 메탈별 Net 단가로 표기 가능
+                    'Cu매출': round(cu_rev, 2),
                     'Ag단가': round(ag_rev_ton, 2),  
                     'Au단가': round(au_rev_ton, 2),
                     'Deductions': round(total_costs, 2)
                 })
 
-            # 3. 결과 테이블 출력 (for문 밖)
-            if match_results:
-                st.divider()
-                st.subheader("🏢 제련소별 예상 수익 비교")
-                df_result = pd.DataFrame(match_results).sort_values('판매단가($/DMT)', ascending=False)
-                num_cols = ['판매단가($/DMT)', '총 판매단가($)', 'Cu단가', 'Ag단가', 'Au단가', 'Deductions']
-                st.dataframe(
-                    df_result.style.format({col: "{:,.2f}" for col in num_cols}), 
-                    use_container_width=True
-                )
+
+
+
+
+
+
+
+
+
 
 
 #--- 판매 조건 설정 탭 --
